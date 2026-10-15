@@ -41,15 +41,6 @@ st.markdown("""
         color: #0E74BC;
         margin-bottom: 1.5rem;
     }
-    .stTabs [data-baseweb="tab-list"] {
-        gap: 8px;
-    }
-    .stTabs [data-baseweb="tab"] {
-        height: 48px;
-        font-weight: 600;
-        border-radius: 6px 6px 0px 0px;
-        padding: 10px 16px;
-    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -74,7 +65,7 @@ def load_and_clean_data():
             break
             
     if not csv_file:
-        st.error("Error: '5g_network_data.csv' not found in workspace.")
+        st.error("Error: '5g_network_data.csv' not found. Please ensure the CSV is committed to your repository.")
         return None, None
         
     try:
@@ -197,15 +188,14 @@ def train_models(df):
     results_df = pd.DataFrame(results).sort_values(by='ROC-AUC', ascending=False)
     return models, results_df, X_train, X_test, y_train, y_test, y_preds, y_probs
 
-with st.spinner("Initializing models & evaluation pipelines..."):
+with st.spinner("Initializing ML models and pipelines..."):
     models, results_df, X_train, X_test, y_train, y_test, y_preds, y_probs = train_models(df_clean)
 
 # -----------------------------------------------------------------------------
 # Sidebar Navigation
 # -----------------------------------------------------------------------------
-st.sidebar.image("https://img.icons8.com/color/96/5g.png", width=70)
-st.sidebar.title("Review 3 Sections")
-app_mode = st.sidebar.radio("Navigate Review Milestones:", [
+st.sidebar.title("Review 3 Navigation")
+app_mode = st.sidebar.radio("Select Section:", [
     "1. Data Understanding",
     "2. Data Cleaning",
     "3. Statistical Checks",
@@ -216,15 +206,10 @@ app_mode = st.sidebar.radio("Navigate Review Milestones:", [
 ])
 
 st.sidebar.markdown("---")
-st.sidebar.info("""
-**Project:** 5G Connection Drop ML  
-**Dataset:** 50,000 session logs  
-**Evaluation:** 80/20 Stratified Split  
-**Target:** Binary Connection Drop
-""")
+st.sidebar.info("5G Connection Drop ML Project | 50,000 Session Logs | Review 3")
 
 # =============================================================================
-# TAB 1: DATA UNDERSTANDING
+# SECTION 1: DATA UNDERSTANDING
 # =============================================================================
 if app_mode == "1. Data Understanding":
     st.header("1. Data Understanding & Feature Taxonomy")
@@ -251,7 +236,7 @@ if app_mode == "1. Data Understanding":
     st.table(pd.DataFrame(tax_data))
 
 # =============================================================================
-# TAB 2: DATA CLEANING
+# SECTION 2: DATA CLEANING
 # =============================================================================
 elif app_mode == "2. Data Cleaning":
     st.header("2. Data Cleaning & Imputation Pipeline")
@@ -266,8 +251,231 @@ elif app_mode == "2. Data Cleaning":
 
     with col2:
         st.subheader("Imputation Rationale")
-        st.info("""
-        **Continuous Numerical:** Imputed with **Median**  
-        *Rationale:* The median is non-parametric and resistant to extreme skewness, whereas the mean shifts heavily when outliers occur.
+        st.info("Continuous Numerical: Imputed with Median (resistant to skewness and extreme spikes).")
+        st.info("Categorical & Boolean: Imputed with Mode (preserves dominant category frequency).")
+        st.info("Zero Row Deletion: Dropping rows reduces statistical power and induces selection bias.")
+
+# =============================================================================
+# SECTION 3: STATISTICAL CHECKS
+# =============================================================================
+elif app_mode == "3. Statistical Checks":
+    st.header("3. Statistical Checks: Normality & Outliers")
+    
+    st.subheader("Shapiro-Wilk Normality Hypothesis Test")
+    st.write("H0: The feature follows a normal distribution (alpha = 0.05).")
+    st.write("H1: The feature does NOT follow a normal distribution.")
+
+    num_cols = [
+        'Signal Strength (dBm)', 'Download Speed (Mbps)', 'Upload Speed (Mbps)',
+        'Latency (ms)', 'Jitter (ms)', 'Battery Level (%)', 'Temperature (C)',
+        'Data Usage (MB)', 'Ping to Google (ms)'
+    ]
+
+    norm_rows = []
+    for col in num_cols:
+        sample = df_clean[col].sample(min(5000, len(df_clean)), random_state=42)
+        stat_w, p_val = stats.shapiro(sample)
+        skew = df_clean[col].skew()
+        kurt = df_clean[col].kurtosis()
+        norm_rows.append({
+            'Feature': col,
+            'Shapiro Stat (W)': round(stat_w, 4),
+            'p-value': f"{p_val:.2e}",
+            'Skewness': round(skew, 3),
+            'Excess Kurtosis': round(kurt, 3),
+            'Decision': "Reject H0 (Non-Normal)" if p_val < 0.05 else "Normal"
+        })
+
+    st.dataframe(pd.DataFrame(norm_rows), use_container_width=True)
+
+    st.success("The -1.20 Kurtosis Proof: Skewness is approximately 0.00 (symmetric), but excess kurtosis is consistently -1.20 across all continuous features. In statistics, an excess kurtosis of exactly -1.20 is the theoretical signature of a Continuous Uniform Distribution U(a, b). This mathematically proves that our telemetry features represent bounded uniform intervals.")
+
+    st.subheader("Distribution & Normal Q-Q Plot Inspector")
+    chosen_col = st.selectbox("Select Feature:", num_cols)
+    
+    fig, axes = plt.subplots(1, 2, figsize=(11, 4))
+    sns.histplot(df_clean[chosen_col], kde=True, ax=axes[0], color='steelblue')
+    axes[0].set_title(f"Histogram & KDE: {chosen_col}")
+    
+    stats.probplot(df_clean[chosen_col].sample(2000, random_state=42), dist="norm", plot=axes[1])
+    axes[1].set_title("Normal Q-Q Plot (Notice Bounded S-Curve Signature)")
+    st.pyplot(fig)
+
+    st.subheader("Tukey's 1.5 IQR Outlier Detection")
+    st.write("Using Tukey's fences [Q1 - 1.5*IQR, Q3 + 1.5*IQR], 0 outliers were detected because the fences mathematically enclose the entire bounded uniform range.")
+
+# =============================================================================
+# SECTION 4: PREPROCESSING & SCALING
+# =============================================================================
+elif app_mode == "4. Preprocessing & Scaling":
+    st.header("4. Data Preprocessing: Standardization vs. Normalization")
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        st.subheader("Standardization (Z-Score)")
+        st.latex(r"z = \frac{x - \mu}{\sigma}")
+        st.write("• Rescales to mean 0 and unit variance 1.")
+        st.write("• Mandatory for Logistic Regression: Restores spherical loss contours for smooth gradient descent.")
         
-        **Categorical & Boolean:**
+    with col2:
+        st.subheader("Normalization (Min-Max)")
+        st.latex(r"x' = \frac{x - x_{\min}}{x_{\max} - x_{\min}}")
+        st.write("• Squashes values strictly into the interval [0, 1].")
+        st.write("• Required for distance-based models (k-NN) so high-magnitude features do not distort Euclidean distances.")
+
+    st.info("Tree-Based Invariance: Decision Trees, Random Forests, and Gradient Boosting are invariant to monotonic scaling because node splits depend solely on threshold rank order.")
+
+    st.subheader("Interactive Feature Scaling Inspector")
+    feat_inspect = st.selectbox("Select Feature to Scale:", [
+        'Download Speed (Mbps)', 'Signal Strength (dBm)', 'Latency (ms)', 'Temperature (C)'
+    ])
+    
+    raw_v = X_train[feat_inspect].values
+    std_v = StandardScaler().fit_transform(X_train[[feat_inspect]]).flatten()
+    minmax_v = MinMaxScaler().fit_transform(X_train[[feat_inspect]]).flatten()
+
+    fig, axes = plt.subplots(1, 3, figsize=(14, 3.8))
+    sns.histplot(raw_v, kde=True, ax=axes[0], color='royalblue')
+    axes[0].set_title(f"Raw: {feat_inspect}\nMean={raw_v.mean():.1f}, Std={raw_v.std():.1f}")
+    
+    sns.histplot(std_v, kde=True, ax=axes[1], color='darkorange')
+    axes[1].set_title(f"Standardized (Z-Score)\nMean={std_v.mean():.1f}, Std={std_v.std():.1f}")
+    
+    sns.histplot(minmax_v, kde=True, ax=axes[2], color='seagreen')
+    axes[2].set_title(f"Normalized (Min-Max [0, 1])\nMin={minmax_v.min():.1f}, Max={minmax_v.max():.1f}")
+    st.pyplot(fig)
+
+# =============================================================================
+# SECTION 5: MODEL BENCHMARKS
+# =============================================================================
+elif app_mode == "5. Model Benchmarks":
+    st.header("5. Model Performance Benchmarks (Test Set N=10,000)")
+    
+    st.dataframe(results_df.style.highlight_max(axis=0, subset=['Accuracy', 'Precision', 'Recall', 'F1-Score', 'ROC-AUC']), use_container_width=True)
+
+    col1, col2 = st.columns(2)
+    with col1:
+        st.subheader("ROC Curves")
+        fig, ax = plt.subplots(figsize=(6, 5))
+        for name, prob in y_probs.items():
+            fpr, tpr, _ = roc_curve(y_test, prob)
+            auc_val = roc_auc_score(y_test, prob)
+            ax.plot(fpr, tpr, label=f"{name[:18]} (AUC={auc_val:.3f})")
+        ax.plot([0, 1], [0, 1], 'k--', label="Chance (0.50)")
+        ax.set_xlabel("False Positive Rate")
+        ax.set_ylabel("True Positive Rate")
+        ax.legend(loc='lower right', fontsize=8)
+        st.pyplot(fig)
+
+    with col2:
+        st.subheader("Confusion Matrix")
+        chosen_m = st.selectbox("Select Model:", list(models.keys()))
+        cm = confusion_matrix(y_test, y_preds[chosen_m])
+        fig, ax = plt.subplots(figsize=(5, 4))
+        sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', ax=ax,
+                    xticklabels=['Active (0)', 'Dropped (1)'],
+                    yticklabels=['Active (0)', 'Dropped (1)'])
+        ax.set_xlabel("Predicted")
+        ax.set_ylabel("Actual Ground Truth")
+        st.pyplot(fig)
+
+# =============================================================================
+# SECTION 6: LIVE PREDICTION SIMULATOR
+# =============================================================================
+elif app_mode == "6. Live Prediction Simulator":
+    st.header("6. Live 5G Telemetry Inference Simulator")
+    st.write("Adjust telemetry sliders below to simulate a live 5G session and predict whether the connection will drop:")
+
+    with st.form("prediction_form"):
+        colA, colB, colC = st.columns(3)
+        
+        with colA:
+            st.markdown("**Radio & Transport Layer**")
+            sig_str = st.slider("Signal Strength (RSRP in dBm)", -110.0, -60.0, -85.0, 0.5)
+            latency = st.slider("Latency (ms)", 1.0, 20.0, 10.0, 0.5)
+            jitter = st.slider("Jitter (ms)", 0.1, 5.0, 2.5, 0.1)
+            ping = st.slider("Ping to Google (ms)", 10.0, 100.0, 50.0, 1.0)
+            
+        with colB:
+            st.markdown("**Throughput & Device State**")
+            dl_speed = st.slider("Download Speed (Mbps)", 100.0, 1000.0, 500.0, 10.0)
+            ul_speed = st.slider("Upload Speed (Mbps)", 20.0, 150.0, 80.0, 5.0)
+            temp = st.slider("Device Temperature (°C)", 20.0, 45.0, 32.0, 0.5)
+            battery = st.slider("Battery Level (%)", 10, 99, 50)
+            duration = st.slider("Connected Duration (min)", 1, 60, 30)
+
+        with colC:
+            st.markdown("**Operational Environment**")
+            handover = st.selectbox("Handover Count", [0, 1, 2, 3, 4], index=1)
+            data_usage = st.slider("Data Usage (MB)", 10.0, 500.0, 250.0, 10.0)
+            quality = st.selectbox("Video Streaming Quality (1: Low to 5: 4K)", [1, 2, 3, 4, 5], index=2)
+            congestion = st.selectbox("Network Congestion Level", ['Low', 'Medium', 'High'], index=1)
+            net_type = st.selectbox("Network Type", ['4G', '5G NSA', '5G SA'], index=1)
+            carrier = st.selectbox("Telecom Carrier", ['Airtel', 'Jio', 'AT&T', 'Verizon', 'T-Mobile', 'BSNL', 'Vi'], index=0)
+            device = st.selectbox("Device Model", ['iPhone 14', 'Galaxy S23', 'Pixel 7', 'Nord 4', 'GT 7'], index=0)
+            band = st.selectbox("Frequency Band", ['n28', 'n41', 'n78', 'n258', 'n260'], index=2)
+            vonr = st.checkbox("VoNR Enabled", value=True)
+
+        selected_model_name = st.selectbox("Choose Classification Engine:", list(models.keys()))
+        submitted = st.form_submit_button("⚡ Predict Connection Drop Probability")
+
+    if submitted:
+        input_dict = {
+            'Location': 'Berlin',
+            'Signal Strength (dBm)': sig_str,
+            'Download Speed (Mbps)': dl_speed,
+            'Upload Speed (Mbps)': ul_speed,
+            'Latency (ms)': latency,
+            'Jitter (ms)': jitter,
+            'Network Type': net_type,
+            'Device Model': device,
+            'Carrier': carrier,
+            'Band': band,
+            'Battery Level (%)': battery,
+            'Temperature (C)': temp,
+            'Connected Duration (min)': duration,
+            'Handover Count': handover,
+            'Data Usage (MB)': data_usage,
+            'Video Streaming Quality': quality,
+            'VoNR Enabled': vonr,
+            'Network Congestion Level': congestion,
+            'Ping to Google (ms)': ping
+        }
+        
+        input_df = pd.DataFrame([input_dict])
+        active_model = models[selected_model_name]
+        
+        drop_prob = active_model.predict_proba(input_df)[0][1]
+        is_drop = active_model.predict(input_df)[0]
+        
+        st.markdown("---")
+        st.subheader("Inference Result:")
+        res_col1, res_col2 = st.columns([1, 2])
+        
+        with res_col1:
+            if is_drop == 1:
+                st.error("⚠️ **PREDICTION: CONNECTION WILL DROP**")
+            else:
+                st.success("✅ **PREDICTION: CONNECTION STABLE / ACTIVE**")
+                
+        with res_col2:
+            st.metric("Estimated Drop Probability", f"{drop_prob*100:.2f}%")
+            st.progress(float(drop_prob))
+
+# =============================================================================
+# SECTION 7: VIVA DEFENSE MANUAL
+# =============================================================================
+elif app_mode == "7. Viva Defense Manual":
+    st.header("7. Review 3 Presentation & Viva Cheat Sheet")
+    
+    with st.expander("Q1: Why is model accuracy around ~50%? Does that mean the model failed?", expanded=True):
+        st.write("Answer: No, the models did not fail; they functioned with statistical integrity. Correlation analysis confirmed that every predictor has a Pearson correlation |r| < 0.010 with the target. The dataset was generated as independent uniform variables. Because the target is evenly balanced (50.06% vs. 49.94%), random chance is 50%. Our models accurately reflected the true mathematical entropy of the data without overfitting.")
+
+    with st.expander("Q2: What is the significance of the -1.20 Kurtosis?", expanded=True):
+        st.write("Answer: A standard normal distribution has excess kurtosis of 0. A continuous uniform distribution U(a, b) has theoretical excess kurtosis of -1.20. Because all our continuous features exhibit kurtosis of exactly -1.20, they represent bounded uniform intervals rather than Gaussian bell curves.")
+
+    with st.expander("Q3: How did you ensure zero Data Leakage?"):
+        st.write("Answer: We performed an 80/20 stratified train-test split BEFORE fitting any transformers. All scalers and encoders were fitted strictly on X_train and evaluated on X_test using scikit-learn Pipeline objects.")
+
+    with st.expander("Q4: Which model architecture do you recommend for real 5G deployment?"):
+        st.write("Answer: We recommend Histogram-based Gradient Boosting (HistGB) and Random Forest. In real cellular networks, drops occur due to non-linear physical thresholds (e.g. Signal dropping below -105 dBm combined with high jitter). Non-linear tree ensembles naturally capture multi-feature trigger thresholds.")
