@@ -462,20 +462,20 @@ elif app_mode == "6. Live Prediction Simulator":
             st.metric("Estimated Drop Probability", f"{drop_prob*100:.2f}%")
             st.progress(float(drop_prob))
 
-# =============================================================================
-# SECTION 7: VIVA DEFENSE MANUAL
-# =============================================================================
-elif app_mode == "7. Viva Defense Manual":
-    st.header("7. Review 3 Presentation & Viva Cheat Sheet")
+# # =============================================================================
+# # SECTION 7: VIVA DEFENSE MANUAL
+# # =============================================================================
+# elif app_mode == "7. Viva Defense Manual":
+#     st.header("7. Review 3 Presentation & Viva Cheat Sheet")
     
-    with st.expander("Q1: Why is model accuracy around ~50%? Does that mean the model failed?", expanded=True):
-        st.write("Answer: No, the models did not fail; they functioned with statistical integrity. Correlation analysis confirmed that every predictor has a Pearson correlation |r| < 0.010 with the target. The dataset was generated as independent uniform variables. Because the target is evenly balanced (50.06% vs. 49.94%), random chance is 50%. Our models accurately reflected the true mathematical entropy of the data without overfitting.")
+#     with st.expander("Q1: Why is model accuracy around ~50%? Does that mean the model failed?", expanded=True):
+#         st.write("Answer: No, the models did not fail; they functioned with statistical integrity. Correlation analysis confirmed that every predictor has a Pearson correlation |r| < 0.010 with the target. The dataset was generated as independent uniform variables. Because the target is evenly balanced (50.06% vs. 49.94%), random chance is 50%. Our models accurately reflected the true mathematical entropy of the data without overfitting.")
 
-    with st.expander("Q2: What is the significance of the -1.20 Kurtosis?", expanded=True):
-        st.write("Answer: A standard normal distribution has excess kurtosis of 0. A continuous uniform distribution U(a, b) has theoretical excess kurtosis of -1.20. Because all our continuous features exhibit kurtosis of exactly -1.20, they represent bounded uniform intervals rather than Gaussian bell curves.")
+#     with st.expander("Q2: What is the significance of the -1.20 Kurtosis?", expanded=True):
+#         st.write("Answer: A standard normal distribution has excess kurtosis of 0. A continuous uniform distribution U(a, b) has theoretical excess kurtosis of -1.20. Because all our continuous features exhibit kurtosis of exactly -1.20, they represent bounded uniform intervals rather than Gaussian bell curves.")
 
-    with st.expander("Q3: How did you ensure zero Data Leakage?"):
-        st.write("Answer: We performed an 80/20 stratified train-test split BEFORE fitting any transformers. All scalers and encoders were fitted strictly on X_train and evaluated on X_test using scikit-learn Pipeline objects.")
+#     with st.expander("Q3: How did you ensure zero Data Leakage?"):
+#         st.write("Answer: We performed an 80/20 stratified train-test split BEFORE fitting any transformers. All scalers and encoders were fitted strictly on X_train and evaluated on X_test using scikit-learn Pipeline objects.")
 
-    with st.expander("Q4: Which model architecture do you recommend for real 5G deployment?"):
-        st.write("Answer: We recommend Histogram-based Gradient Boosting (HistGB) and Random Forest. In real cellular networks, drops occur due to non-linear physical thresholds (e.g. Signal dropping below -105 dBm combined with high jitter). Non-linear tree ensembles naturally capture multi-feature trigger thresholds.")
+#     with st.expander("Q4: Which model architecture do you recommend for real 5G deployment?"):
+#         st.write("Answer: We recommend Histogram-based Gradient Boosting (HistGB) and Random Forest. In real cellular networks, drops occur due to non-linear physical thresholds (e.g. Signal dropping below -105 dBm combined with high jitter). Non-linear tree ensembles naturally capture multi-feature trigger thresholds.")
